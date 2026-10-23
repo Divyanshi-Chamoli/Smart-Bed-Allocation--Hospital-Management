@@ -1,0 +1,28 @@
+{# Shared UI pieces. Import with: {% from "_ui.html" import status, urgency_legend, search_bar %} #}
+
+{# Coloured dot + sentence-case label. The label is always shown so colour is never the only cue. #}
+{% macro status(value, label=none, empty="") -%}
+  {%- set tone, default_label = status_info(value) -%}
+  {%- set text = label or default_label or empty -%}
+  {%- if text -%}
+  <span class="status tone-{{ tone }}"><span class="dot" aria-hidden="true"></span>{{ text }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro urgency_legend(title="Urgency levels") -%}
+<div class="legend" aria-label="{{ title }}">
+  <span class="legend-title">{{ title }}</span>
+  {% for code in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] %}{{ status(code) }}{% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro search_bar(value, placeholder, clear_url=none) -%}
+<form method="get" class="search" role="search">
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input name="q" value="{{ value }}" placeholder="{{ placeholder }}" aria-label="{{ placeholder }}">
+  </div>
+  <button class="secondary">Search</button>
+  {% if value and clear_url %}<a class="btn secondary" href="{{ clear_url }}" style="height:44px">Clear</a>{% endif %}
+</form>
+{%- endmacro %}

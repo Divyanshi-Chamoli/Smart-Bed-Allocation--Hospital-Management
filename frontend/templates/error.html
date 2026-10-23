@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Error {{ code }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>{{ {403: 'Access denied', 404: 'Page not found', 400: 'Request not accepted'}.get(code, 'Error') }}</h1>
+  <p class="subtitle">Error {{ code }}</p>
+  <p>{{ message }}</p>
+  <div class="actions"><a class="btn secondary" href="{{ url_for('dashboard') if session.username else url_for('login') }}">{{ 'Back to dashboard' if session.username else 'Sign in' }}</a></div>
+</div>
+{% endblock %}

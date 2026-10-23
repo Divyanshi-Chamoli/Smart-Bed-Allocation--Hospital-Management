@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+<p class="subtitle">Live SQL reports over the reporting views. Expand “SQL” under a report to see its query.</p>
+
+{% for s in sections %}
+<div class="panel">
+  <h2>{{ s.title }}</h2>
+  {% if s.rows %}
+  <div class="table-wrap">
+    <table>
+      <tr>{% for c in s.columns %}<th{% if s.rows[0][c] is number %} class="num"{% endif %}>{{ c|replace('_', ' ')|capitalize }}</th>{% endfor %}</tr>
+      {% for row in s.rows %}
+      <tr>{% for c in s.columns %}
+        {% set v = row[c] %}
+        <td{% if v is number %} class="num"{% endif %}>{% if v is none %}{% elif c in ('action', 'payment_status', 'urgency_code') %}{{ status(v) }}{% else %}{{ v|dt }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No data yet.</p>
+  {% endif %}
+  <details><summary>SQL</summary><pre class="sql">{{ s.sql }}</pre></details>
+</div>
+{% endfor %}
+{% endblock %}

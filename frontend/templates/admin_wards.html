@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Wards{% endblock %}
+{% block content %}
+<h1>Wards and beds</h1>
+<p class="subtitle">A ward cannot hold more beds than its capacity. Reserved beds can only be allocated to critical patients.</p>
+
+<div class="table-wrap">
+  <table>
+    <tr><th>ID</th><th>Ward</th><th>Type</th><th class="num">Floor</th><th class="num">Capacity</th><th class="num">Beds</th><th class="num">Free</th><th class="num">Reserved for critical</th></tr>
+    {% for w in wards %}
+    <tr>
+      <td>{{ w.ward_id }}</td><td>{{ w.ward_name }}</td><td>{{ w.ward_type }}</td><td class="num">{{ w.floor_no }}</td>
+      <td class="num">{{ w.capacity }}</td><td class="num">{{ w.total_beds }}</td><td class="num">{{ w.available_beds }}</td><td class="num">{{ w.reserved_critical_beds }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="grid grid-2">
+  <div class="panel">
+    <h2>Add a bed</h2>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-grid">
+        <div><label for="ward_id">Ward</label>
+          <select id="ward_id" name="ward_id" required>
+            {% for w in wards %}<option value="{{ w.ward_id }}" {{ 'disabled' if w.total_beds >= w.capacity }}>{{ w.ward_name }} ({{ w.total_beds }}/{{ w.capacity }})</option>{% endfor %}
+          </select>
+        </div>
+        <div><label for="bed_number">Bed number</label><input id="bed_number" name="bed_number" required maxlength="10" placeholder="e.g. G111"></div>
+      </div>
+      <div class="actions"><button name="action" value="bed">Add bed</button></div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Add a ward</h2>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-grid">
+        <div><label for="ward_name">Name</label><input id="ward_name" name="ward_name" required maxlength="50"></div>
+        <div><label for="ward_type">Type</label><input id="ward_type" name="ward_type" required maxlength="30" list="ward-types"></div>
+        <div><label for="floor_no">Floor</label><input id="floor_no" name="floor_no" type="number" min="0" required></div>
+        <div><label for="capacity">Capacity</label><input id="capacity" name="capacity" type="number" min="1" required></div>
+        <div><label for="reserved_critical_beds">Reserved for critical</label><input id="reserved_critical_beds" name="reserved_critical_beds" type="number" min="0" value="0"></div>
+      </div>
+      <datalist id="ward-types">{% for t in ward_types %}<option>{{ t }}</option>{% endfor %}</datalist>
+      <div class="actions"><button name="action" value="ward">Add ward</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Daily bed tariffs</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Ward type</th><th class="num">Daily rate</th></tr>
+      {% for t in tariffs %}<tr><td>{{ t.ward_type }}</td><td class="num">{{ t.daily_rate|money }}</td></tr>{% endfor %}
+    </table>
+  </div>
+  <form method="post" class="form-grid" style="margin-top:20px; grid-template-columns: 1fr 1fr auto">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div><label for="tariff_type">Ward type</label><input id="tariff_type" name="ward_type" required list="ward-types"></div>
+    <div><label for="daily_rate">Daily rate</label><input id="daily_rate" name="daily_rate" type="number" min="0" step="0.01" required></div>
+    <button name="action" value="tariff">Save tariff</button>
+  </form>
+</div>
+{% endblock %}

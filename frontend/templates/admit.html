@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status, urgency_legend %}
+{% block title %}Admit patient{% endblock %}
+{% block content %}
+<h1>Admit a patient</h1>
+<p class="subtitle">The system recommends a bed from the patient's urgency, the ward type they need, their age and current availability. If no suitable bed is free, the patient joins the prioritised waiting queue.</p>
+
+<div class="panel">
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid form-grid-4">
+      <div><label for="patient_id">Patient</label>
+        <select id="patient_id" name="patient_id" required>
+          <option value="">Choose…</option>
+          {% for p in patients %}
+          <option value="{{ p.patient_id }}" {{ 'selected' if sel.patient_id == p.patient_id }}>{{ p.name }} ({{ p.age }}){{ ' - waiting' if p.waiting }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><label for="doctor_id">Doctor</label>
+        <select id="doctor_id" name="doctor_id" required>
+          <option value="">Choose…</option>
+          {% for d in doctors %}
+          <option value="{{ d.staff_id }}" {{ 'selected' if sel.doctor_id == d.staff_id }}>{{ d.staff_name }} - {{ d.department }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><label for="ward_type">Required ward type</label>
+        <select id="ward_type" name="ward_type" required>
+          <option value="">Choose…</option>
+          {% for t in ward_types %}<option {{ 'selected' if sel.ward_type == t }}>{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="urgency">Urgency <span id="urgency-dot">{{ status(sel.urgency) }}</span></label>
+        <select id="urgency" name="urgency" required>
+          <option value="">Choose…</option>
+          {% for u in urgencies %}<option value="{{ u.urgency_code }}" {{ 'selected' if sel.urgency == u.urgency_code }}>{{ status_info(u.urgency_code)[1] }} - {{ u.description }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field-full"><label for="notes">Notes</label><input id="notes" name="notes" maxlength="400" value="{{ sel.notes or '' }}" placeholder="Reason for admission (optional)"></div>
+    </div>
+    <div class="actions">
+      <button name="action" value="auto">Allocate best bed / add to queue</button>
+      <button name="action" value="recommend" class="secondary">Show recommended beds</button>
+    </div>
+    <p class="hint">“Allocate best bed” goes through the waiting queue, so the patient only gets a bed if nobody more urgent who is already waiting can use it.</p>
+  </form>
+</div>
+{{ urgency_legend() }}
+
+{% if candidates is not none %}
+<div class="panel">
+  <h2>Recommended beds</h2>
+  {% if effective_type and effective_type != sel.ward_type %}
+  <div class="callout">Age rule: a <b>{{ sel.ward_type }}</b> request for this patient is served by the <b>{{ effective_type }}</b> ward.</div>
+  {% endif %}
+  {% if candidates %}
+  <div class="table-wrap">
+    <table>
+      <tr><th class="num">Rank</th><th>Ward</th><th>Bed</th><th class="num">Ward occupancy</th><th>Why</th><th></th></tr>
+      {% for c in candidates %}
+      <tr class="{{ 'candidate-best' if loop.first }}">
+        <td class="num">{{ c.candidate_rank }}</td>
+        <td>{{ c.ward_name }} <span class="rule">{{ c.ward_type }}</span>{% if loop.first %} <span class="tag">· best match</span>{% endif %}</td>
+        <td>{{ c.bed_number }}</td>
+        <td class="num">{{ c.ward_occupancy_pct }}%</td>
+        <td class="rule">{{ c.rule_applied }}</td>
+        <td class="actions-cell">
+          <form method="post" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            {% for k in ['patient_id', 'doctor_id', 'ward_type', 'urgency', 'notes'] %}<input type="hidden" name="{{ k }}" value="{{ sel[k] or '' }}">{% endfor %}
+            <input type="hidden" name="bed_id" value="{{ c.bed_id }}">
+            <button name="action" value="allocate" class="row-action">Allocate bed</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No suitable bed is free under the allocation rules. Use “Allocate best bed / add to queue” to put the patient in the waiting queue.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var labels = { CRITICAL: ["critical", "Critical"], HIGH: ["high", "High"], MEDIUM: ["moderate", "Moderate"], LOW: ["ok", "Low"] };
+  var select = document.getElementById("urgency");
+  var target = document.getElementById("urgency-dot");
+  select.addEventListener("change", function () {
+    var info = labels[select.value];
+    target.innerHTML = info ? '<span class="status tone-' + info[0] + '"><span class="dot" aria-hidden="true"></span>' + info[1] + '</span>' : "";
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}HMS{% endblock %} · Hospital Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if session.username %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">HMS</div>
+      <div class="brand-sub">Smart Bed Allocation</div>
+    </div>
+    <nav aria-label="Main">
+      {% for endpoint, label in nav %}
+        {% set active = request.endpoint and request.endpoint.startswith(endpoint) %}
+        <a href="{{ url_for(endpoint) }}" class="{{ 'active' if active }}" {% if active %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="account">
+        <button type="button" class="account-button" id="account-button"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu">
+          <span class="avatar" aria-hidden="true">{{ initials(session.name) }}</span>
+          <span>
+            <span class="account-name">{{ session.name }}</span>
+            <span class="account-role">{{ role_label(session.role) }}</span>
+          </span>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="account-menu" id="account-menu" role="menu" aria-labelledby="account-button" hidden>
+          <a href="{{ url_for('change_password') }}" role="menuitem" tabindex="-1">Change password</a>
+          <hr>
+          <form method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button type="submit" role="menuitem" tabindex="-1">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+{% else %}
+<main class="content center">
+{% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}"><span class="dot" aria-hidden="true"></span><span>{{ message }}</span></div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+  </main>
+{% if session.username %}
+  </div>
+</div>
+<script>
+(function () {
+  var button = document.getElementById("account-button");
+  var menu = document.getElementById("account-menu");
+  var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+
+  // focusIndex is omitted for mouse clicks so no focus ring appears; keyboard users land on an item
+  function open(focusIndex) {
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    if (focusIndex !== undefined) items[focusIndex].focus();
+  }
+  function close(returnFocus) {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    if (returnFocus) button.focus();
+  }
+
+  button.addEventListener("click", function (e) {
+    // e.detail is 0 when the click came from Enter/Space on the button
+    if (menu.hidden) open(e.detail === 0 ? 0 : undefined); else close(false);
+  });
+  button.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); open(0); }
+    if (e.key === "ArrowUp") { e.preventDefault(); open(items.length - 1); }
+  });
+  menu.addEventListener("keydown", function (e) {
+    var i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+    if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+    if (e.key === "Tab") close(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !menu.hidden) close(true);
+  });
+  document.addEventListener("click", function (e) {
+    if (!menu.hidden && !menu.contains(e.target) && !button.contains(e.target)) close(false);
+  });
+})();
+</script>
+{% endif %}
+</body>
+</html>

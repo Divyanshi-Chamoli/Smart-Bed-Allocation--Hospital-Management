@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h1>User accounts</h1>
+<p class="subtitle">Each account belongs to exactly one staff member and has one role. Passwords are stored as SHA-256 hashes.</p>
+
+<div class="table-wrap">
+  <table>
+    <tr><th>ID</th><th>Username</th><th>Staff member</th><th>Role</th><th>Status</th><th>Reset password</th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.user_id }}</td>
+      <td class="mono">{{ u.username }}</td>
+      <td>{{ u.staff_name }} <span class="rule">{{ u.designation }}</span></td>
+      <td>
+        <form method="post" class="inline row-actions">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="user_id" value="{{ u.user_id }}">
+          <select name="role_name" aria-label="Role for {{ u.username }}" style="width:auto">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role_name }}>{{ role_label(r) }}</option>{% endfor %}</select>
+          <button name="action" value="role" class="row-action plain">Set</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" class="inline row-actions">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="user_id" value="{{ u.user_id }}">
+          {{ status(u.account_status) }}
+          <input type="hidden" name="status" value="{{ 'INACTIVE' if u.account_status == 'ACTIVE' else 'ACTIVE' }}">
+          <button name="action" value="status" class="row-action plain">{{ 'Deactivate' if u.account_status == 'ACTIVE' else 'Activate' }}</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" class="inline row-actions">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="user_id" value="{{ u.user_id }}">
+          <input name="password" type="password" minlength="6" placeholder="New password" required aria-label="New password for {{ u.username }}" style="width:160px">
+          <button name="action" value="reset" class="row-action plain">Reset</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Create an account</h2>
+  {% if no_account %}
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid">
+      <div><label for="staff_id">Staff member</label>
+        <select id="staff_id" name="staff_id" required>
+          {% for s in no_account %}<option value="{{ s.staff_id }}">{{ s.staff_name }} ({{ s.designation }})</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="role_name">Role</label><select id="role_name" name="role_name">{% for r in roles %}<option value="{{ r }}">{{ role_label(r) }}</option>{% endfor %}</select></div>
+      <div><label for="username">Username</label><input id="username" name="username" required maxlength="50" pattern="[A-Za-z0-9._-]+"></div>
+      <div><label for="password">Password</label><input id="password" name="password" type="password" minlength="6" required></div>
+    </div>
+    <div class="actions"><button name="action" value="create">Create account</button></div>
+  </form>
+  {% else %}
+  <p class="empty">Every staff member already has an account. Add staff on the <a href="{{ url_for('admin_staff') }}">Staff</a> page first.</p>
+  {% endif %}
+</div>
+{% endblock %}

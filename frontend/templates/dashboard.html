@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p class="subtitle">Welcome, {{ session.name }}.</p>
+
+<div class="grid grid-4 stats">
+  <div class="stat"><div class="label">Beds available</div><div class="value">{{ totals.available }}<small> / {{ totals.beds }}</small></div></div>
+  <div class="stat"><div class="label">Patients admitted</div><div class="value">{{ stats.admitted }}</div></div>
+  <div class="stat"><div class="label">Waiting for a bed</div><div class="value">{{ stats.waiting }}</div></div>
+  {% if has_role(ADMIN, BILLING) %}
+  <div class="stat"><div class="label">Unpaid bills</div><div class="value">{{ stats.unpaid_bills }}</div></div>
+  {% else %}
+  <div class="stat"><div class="label">Admitted today</div><div class="value">{{ stats.admitted_today }}</div></div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Ward occupancy</h2>
+  <div class="ward-grid">
+    {% for w in wards %}
+    {% set pct = w.occupancy_pct or 0 %}
+    <div class="ward-card">
+      <h3>{{ w.ward_name }}</h3>
+      <div class="meta">{{ w.ward_type }} · floor {{ w.floor_no }}{% if w.reserved_critical_beds %} · {{ w.reserved_critical_beds }} reserved for critical{% endif %}</div>
+      <div class="bar {{ 'near-full' if pct >= 75 }}" role="img" aria-label="{{ pct }}% occupied"><span style="width: {{ pct }}%"></span></div>
+      <div class="ward-foot">
+        <span>{{ w.available_beds }} free · {{ w.occupied_beds }} occupied{% if w.awaiting_cleaning_beds + w.awaiting_inspection_beds %} · {{ w.awaiting_cleaning_beds + w.awaiting_inspection_beds }} turning around{% endif %}{% if w.maintenance_beds %} · {{ w.maintenance_beds }} maintenance{% endif %}</span>
+        <b>{{ pct }}%</b>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Why beds are unavailable</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Ward</th><th class="num">Occupied</th><th class="num">Awaiting cleaning</th><th class="num">Awaiting inspection</th><th class="num">Maintenance</th><th>Past target</th></tr>
+      {% for b in blocked %}
+      <tr>
+        <td>{{ b.ward_name }}</td>
+        <td class="num">{{ b.occupied }}</td>
+        <td class="num">{{ b.awaiting_cleaning }}</td>
+        <td class="num">{{ b.awaiting_inspection }}</td>
+        <td class="num">{{ b.maintenance }}</td>
+        <td>{% if b.past_target %}{{ status('PAST_TARGET', b.past_target ~ (' bed' if b.past_target == 1 else ' beds') ~ ' past target') }}{% else %}<span class="rule">None</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">Every bed is available.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if late_beds %}
+  <p class="hint">Past target:
+    {% for b in late_beds %}{{ b.ward_name }} {{ b.bed_number }} ({{ b.reason|lower }} for {{ b.minutes_in_state }} min, target {{ b.target_minutes }}){{ ', ' if not loop.last }}{% endfor %}.
+    {% if has_role(ADMIN, NURSE) %}<a href="{{ url_for('beds') }}">Open bed board</a>{% endif %}
+  </p>
+  {% endif %}
+</div>
+
+{% if has_role(ADMIN, DOCTOR, NURSE) %}
+<div class="panel">
+  <h2>Top of the waiting queue</h2>
+  {% if queue_top %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>#</th><th>Patient</th><th>Ward type</th><th>Urgency</th><th class="num">Priority</th><th class="num">Waiting</th></tr>
+      {% for q in queue_top %}
+      <tr>
+        <td>{{ q.queue_position }}</td>
+        <td><a href="{{ url_for('patient_detail', patient_id=q.patient_id) }}">{{ q.patient_name }}</a> <span class="rule">({{ q.age }})</span></td>
+        <td>{{ q.required_ward_type }}</td>
+        <td>{{ status(q.urgency_code) }}</td>
+        <td class="num score">{{ q.priority_score }}</td>
+        <td class="num">{{ q.minutes_waiting }} min{% if q.overdue == 'Y' %} &nbsp;{{ status('OVERDUE') }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="actions"><a class="btn" href="{{ url_for('admit') }}">Admit a patient</a><a class="btn secondary" href="{{ url_for('queue') }}">Open queue</a></div>
+  {% else %}
+  <p class="empty">Nobody is waiting for a bed.</p>
+  <div class="actions"><a class="btn" href="{{ url_for('admit') }}">Admit a patient</a></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if session.role == LAB %}
+<div class="panel"><h2>Laboratory</h2><a class="btn" href="{{ url_for('lab') }}">Record lab results</a></div>
+{% elif session.role == BILLING %}
+<div class="panel"><h2>Billing</h2><a class="btn" href="{{ url_for('billing') }}">Go to billing</a></div>
+{% endif %}
+{% endblock %}

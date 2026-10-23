@@ -1,0 +1,14 @@
+INSERT INTO role
+VALUES (role_seq.NEXTVAL, 'ADMIN');
+
+INSERT INTO role
+VALUES (role_seq.NEXTVAL, 'DOCTOR');
+
+INSERT INTO role
+VALUES (role_seq.NEXTVAL, 'NURSE');
+
+INSERT INTO role
+VALUES (role_seq.NEXTVAL, 'LAB_STAFF');
+
+INSERT INTO role
+VALUES (role_seq.NEXTVAL, 'BILLING_STAFF');

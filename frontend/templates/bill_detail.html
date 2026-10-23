@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Bill #{{ bill.bill_id }}{% endblock %}
+{% block content %}
+<h1>Bill #{{ bill.bill_id }}</h1>
+<p class="subtitle">{{ status(bill.payment_status) }} · {{ bill.patient_name }} · admission {{ bill.admission_id }} ({{ bill.admission_status|lower }}) · {{ bill.bill_date|d }} · <a href="{{ url_for('billing') }}">All bills</a></p>
+
+<div class="grid grid-4 stats">
+  <div class="stat"><div class="label">Total</div><div class="value">{{ bill.total_amount|money }}</div></div>
+  <div class="stat"><div class="label">Paid</div><div class="value">{{ bill.amount_paid|money }}</div></div>
+  <div class="stat"><div class="label">Balance due</div><div class="value">{{ bill.balance_due|money }}</div></div>
+</div>
+
+<div class="panel">
+  <h2>Items</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Description</th><th>Source</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th></th></tr>
+      {% for i in items %}
+      <tr>
+        <td>{{ i.description }}</td><td class="rule">{{ i.source_type|capitalize }}</td>
+        <td class="num">{{ i.quantity }}</td><td class="num">{{ i.unit_price|money }}</td><td class="num">{{ i.amount|money }}</td>
+        <td class="actions-cell">
+          {% if bill.payment_status != 'PAID' %}
+          <form method="post" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="bill_item_id" value="{{ i.bill_item_id }}">
+            <button name="action" value="remove" class="row-action plain">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">No items yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="actions">
+    <form method="post" action="{{ url_for('bill_generate', admission_id=bill.admission_id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="secondary">Add unbilled lab / bed charges</button>
+    </form>
+  </div>
+</div>
+
+{% if bill.payment_status != 'PAID' %}
+<div class="grid grid-2">
+  <div class="panel">
+    <h2>Add an item</h2>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-grid">
+        <div class="field-full"><label for="description">Description</label><input id="description" name="description" required maxlength="200" placeholder="e.g. Pharmacy, consultation"></div>
+        <div><label for="quantity">Quantity</label><input id="quantity" name="quantity" type="number" min="1" value="1" required></div>
+        <div><label for="unit_price">Unit price</label><input id="unit_price" name="unit_price" type="number" min="0" step="0.01" required></div>
+      </div>
+      <div class="actions"><button name="action" value="item">Add item</button></div>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Record a payment</h2>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="amount">Amount</label>
+      <input id="amount" name="amount" type="number" min="0.01" step="0.01" max="{{ bill.balance_due }}" value="{{ bill.balance_due }}" required>
+      <div class="actions"><button name="action" value="pay">Record payment</button></div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

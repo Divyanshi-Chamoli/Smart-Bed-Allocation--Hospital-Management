@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status, urgency_legend %}
+{% block title %}Waiting queue{% endblock %}
+{% block content %}
+<div class="panel-head">
+  <div>
+    <h1>Waiting queue</h1>
+    <p class="subtitle">{{ queue|length }} patient{{ '' if queue|length == 1 else 's' }} waiting · most urgent first</p>
+  </div>
+  <form method="post" action="{{ url_for('queue_process') }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="secondary">Process queue now</button>
+  </form>
+</div>
+
+{{ urgency_legend() }}
+
+<div class="table-wrap">
+  <table>
+    <tr><th class="num">#</th><th>Patient</th><th class="num">Age</th><th>Ward type</th><th>Urgency</th><th class="num">Priority score</th><th>Requested</th><th class="num">Waiting</th><th>Doctor</th><th>Notes</th><th></th></tr>
+    {% for q in queue %}
+    <tr>
+      <td class="num">{{ q.queue_position }}</td>
+      <td><a href="{{ url_for('patient_detail', patient_id=q.patient_id) }}">{{ q.patient_name }}</a></td>
+      <td class="num">{{ q.age }}</td>
+      <td>{{ q.required_ward_type }}</td>
+      <td>{{ status(q.urgency_code) }}</td>
+      <td class="num score">{{ q.priority_score }}</td>
+      <td>{{ q.request_time|dt }}</td>
+      <td class="num">{{ q.minutes_waiting }} min{% if q.overdue == 'Y' %}<br>{{ status('OVERDUE') }}{% endif %}</td>
+      <td>{{ q.doctor_name }}</td>
+      <td class="rule">{{ q.notes or '' }}</td>
+      <td class="actions-cell">
+        <span class="row-actions">
+          <a class="row-action" href="{{ url_for('admit', patient_id=q.patient_id, ward_type=q.required_ward_type, urgency=q.urgency_code) }}">Allocate bed</a>
+          <form method="post" action="{{ url_for('queue_cancel', queue_id=q.queue_id) }}" class="inline" onsubmit='return confirm({{ ("Remove " ~ q.patient_name ~ " from the queue?")|tojson }})'>
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="row-action plain">Cancel</button>
+          </form>
+        </span>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="11" class="empty">Nobody is waiting for a bed.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="grid grid-queue">
+  <div class="panel">
+    <h2>Urgency bands</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Urgency</th><th class="num">Base weight</th><th class="num">Target wait</th></tr>
+        {% for u in urgencies %}
+        <tr><td>{{ status(u.urgency_code) }}</td><td class="num">{{ u.base_weight }}</td><td class="num">{{ u.target_wait_minutes }} min</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Recent allocation activity</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>When</th><th>Action</th><th>Patient</th><th>Bed</th></tr>
+        {% for r in recent %}
+        <tr>
+          <td class="nowrap">{{ r.acted_at|dt('%d %b %H:%M') }}</td>
+          <td>{{ status(r.action) }}</td>
+          <td class="nowrap">{{ r.patient_name or '' }}</td>
+          <td>{% if r.bed_number %}{{ r.ward_name }} / {{ r.bed_number }}{% endif %}<div class="rule">{{ r.rule_applied or '' }}</div></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty">No activity yet.</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

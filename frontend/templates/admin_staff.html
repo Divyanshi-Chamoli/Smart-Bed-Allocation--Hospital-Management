@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Staff{% endblock %}
+{% block content %}
+<h1>Staff</h1>
+<p class="subtitle">Doctors and other hospital employees. Give a staff member a login on the <a href="{{ url_for('admin_users') }}">Users</a> page.</p>
+
+<div class="table-wrap">
+  <table>
+    <tr><th>ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Phone</th><th>Email</th><th>Login</th><th></th></tr>
+    {% for s in staff %}
+    <tr>
+      <td>{{ s.staff_id }}</td><td>{{ s.staff_name }}</td><td>{{ s.designation }}</td><td>{{ s.department or '' }}</td>
+      <td>{{ s.phone or '' }}</td><td>{{ s.email or '' }}</td><td class="mono">{{ s.username or '' }}</td>
+      <td class="actions-cell"><a class="row-action" href="{{ url_for('admin_staff', edit=s.staff_id) }}">Edit</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel">
+  <h2>{{ 'Edit ' ~ edit.staff_name if edit else 'Add a staff member' }}</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if edit %}<input type="hidden" name="staff_id" value="{{ edit.staff_id }}">{% endif %}
+    <div class="form-grid">
+      <div><label for="staff_name">Name</label><input id="staff_name" name="staff_name" required maxlength="100" value="{{ edit.staff_name if edit }}"></div>
+      <div><label for="designation">Designation</label>
+        <select id="designation" name="designation" required>
+          {% for d in designations %}<option {{ 'selected' if edit and edit.designation == d }}>{{ d }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="department">Department</label><input id="department" name="department" maxlength="50" value="{{ edit.department or '' if edit }}"></div>
+      <div><label for="phone">Phone</label><input id="phone" name="phone" maxlength="15" value="{{ edit.phone or '' if edit }}"></div>
+      <div><label for="email">Email</label><input id="email" name="email" type="email" maxlength="100" value="{{ edit.email or '' if edit }}"></div>
+    </div>
+    <div class="actions">
+      <button>{{ 'Save changes' if edit else 'Add staff member' }}</button>
+      {% if edit %}<a class="btn secondary" href="{{ url_for('admin_staff') }}">Cancel</a>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+{# Shared patient fields. Expects `p` (patient dict or none), genders, blood_groups #}
+<div class="form-grid">
+  <div><label for="first_name">First name</label><input id="first_name" name="first_name" required maxlength="50" value="{{ p.first_name if p }}"></div>
+  <div><label for="last_name">Last name</label><input id="last_name" name="last_name" required maxlength="50" value="{{ p.last_name if p }}"></div>
+  <div><label for="dob">Date of birth</label><input id="dob" type="date" name="dob" required value="{{ p.dob.strftime('%Y-%m-%d') if p }}"></div>
+  <div><label for="gender">Gender</label>
+    <select id="gender" name="gender" required>
+      {% for g in genders %}<option {{ 'selected' if p and p.gender == g }}>{{ g }}</option>{% endfor %}
+    </select>
+  </div>
+  <div><label for="phone">Phone</label><input id="phone" name="phone" maxlength="15" value="{{ p.phone or '' if p }}"></div>
+  <div><label for="blood_group">Blood group</label>
+    <select id="blood_group" name="blood_group">
+      <option value="">Unknown</option>
+      {% for b in blood_groups %}<option {{ 'selected' if p and p.blood_group == b }}>{{ b }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field-full"><label for="address">Address</label><input id="address" name="address" maxlength="200" value="{{ p.address or '' if p }}"></div>
+</div>

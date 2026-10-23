@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}{{ patient.first_name }} {{ patient.last_name }}{% endblock %}
+{% block content %}
+<h1>{{ patient.first_name }} {{ patient.last_name }}</h1>
+<p class="subtitle">Patient {{ patient.patient_id }} · {{ patient.age }} years · {{ patient.gender }}{% if patient.blood_group %} · {{ patient.blood_group }}{% endif %} · <a href="{{ url_for('patients') }}">All patients</a></p>
+
+{% if waiting %}
+<div class="callout">{{ status('WAITING', 'Waiting') }} for a <b>{{ waiting.required_ward_type }}</b> bed: position <b>{{ waiting.queue_position }}</b>,
+  priority score <b>{{ waiting.priority_score }}</b>, waiting {{ waiting.minutes_waiting }} min. <a href="{{ url_for('queue') }}">View queue</a></div>
+{% endif %}
+
+<div class="panel">
+  <h2>Admission history</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Admission</th><th>Admitted</th><th>Discharged</th><th>Status</th><th>Urgency</th><th>Ward / bed</th><th>Doctor</th><th class="num">Lab tests</th><th class="num">Bill</th><th>Payment</th></tr>
+      {% for h in history %}
+      <tr>
+        <td>{{ h.admission_id }}</td>
+        <td>{{ h.admission_date|dt }}</td>
+        <td>{{ h.discharge_date|dt }}</td>
+        <td>{{ status(h.admission_status) }}</td>
+        <td>{{ status(h.urgency_code) }}</td>
+        <td>{{ h.ward_name }} / {{ h.bed_number }}</td>
+        <td>{{ h.doctor_name }}</td>
+        <td class="num">{{ h.lab_tests }}</td>
+        <td class="num">{{ h.bill_total|money }}</td>
+        <td>{{ status(h.payment_status) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="empty">No admissions yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+{% if labs %}
+<div class="panel">
+  <h2>Lab results</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Date</th><th>Test</th><th>Result</th><th>Remarks</th><th>Recorded by</th></tr>
+      {% for r in labs %}
+      <tr><td>{{ r.test_date|dt }}</td><td>{{ r.test_name }}</td><td>{{ r.result_value or '' }}</td><td class="rule">{{ r.remarks or '' }}</td><td>{{ r.recorded_by }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Edit details</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% with p = patient %}{% include "_patient_form.html" %}{% endwith %}
+    <div class="actions"><button>Save changes</button></div>
+  </form>
+</div>
+{% endblock %}

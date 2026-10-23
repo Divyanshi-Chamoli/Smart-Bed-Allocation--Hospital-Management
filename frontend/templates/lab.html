@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Lab{% endblock %}
+{% block content %}
+<h1>Laboratory</h1>
+<p class="subtitle">Tests can only be recorded against a current admission.</p>
+
+{% if has_role(ADMIN, LAB) %}
+<div class="panel">
+  <h2>Record a result</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid">
+      <div><label for="admission_id">Admission</label>
+        <select id="admission_id" name="admission_id" required>
+          <option value="">Choose…</option>
+          {% for a in current %}<option value="{{ a.admission_id }}">#{{ a.admission_id }} {{ a.patient_name }} - {{ a.ward_name }} / {{ a.bed_number }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="test_id">Test</label>
+        <select id="test_id" name="test_id" required>
+          <option value="">Choose…</option>
+          {% for t in tests %}<option value="{{ t.test_id }}">{{ t.test_name }} ({{ t.test_cost|money }})</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="result_value">Result</label><input id="result_value" name="result_value" maxlength="500" required></div>
+      <div><label for="remarks">Remarks</label><input id="remarks" name="remarks" maxlength="500"></div>
+    </div>
+    <div class="actions"><button>Save result</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Results</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Date</th><th>Admission</th><th>Patient</th><th>Test</th><th>Result</th><th>Remarks</th><th>Recorded by</th></tr>
+      {% for r in results %}
+      <tr>
+        <td>{{ r.test_date|dt }}</td><td>{{ r.admission_id }}</td><td>{{ r.patient_name }}</td><td>{{ r.test_name }}</td>
+        <td>{{ r.result_value or '' }}</td><td class="rule">{{ r.remarks or '' }}</td><td>{{ r.recorded_by }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">No results recorded.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Test catalogue</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>ID</th><th>Test</th><th class="num">Cost</th>{% if has_role(ADMIN) %}<th></th>{% endif %}</tr>
+      {% for t in tests %}
+      <tr>
+        {% if has_role(ADMIN) %}
+        {% set fid = 'test' ~ t.test_id %}
+        <td>{{ t.test_id }}</td>
+        <td><input form="{{ fid }}" name="test_name" value="{{ t.test_name }}" required maxlength="100" aria-label="Test name"></td>
+        <td class="num"><input form="{{ fid }}" name="test_cost" type="number" min="0" step="0.01" value="{{ t.test_cost }}" required style="max-width:120px" aria-label="Cost"></td>
+        <td class="actions-cell">
+          <form method="post" action="{{ url_for('lab_tests') }}" id="{{ fid }}" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="test_id" value="{{ t.test_id }}">
+            <button class="row-action plain">Save</button>
+          </form>
+        </td>
+        {% else %}
+        <td>{{ t.test_id }}</td><td>{{ t.test_name }}</td><td class="num">{{ t.test_cost|money }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if has_role(ADMIN) %}
+  <form method="post" action="{{ url_for('lab_tests') }}" class="form-grid" style="margin-top:20px; grid-template-columns: 2fr 1fr auto">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div><label for="new_test_name">New test name</label><input id="new_test_name" name="test_name" required maxlength="100"></div>
+    <div><label for="new_test_cost">Cost</label><input id="new_test_cost" name="test_cost" type="number" min="0" step="0.01" required></div>
+    <button>Add test</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

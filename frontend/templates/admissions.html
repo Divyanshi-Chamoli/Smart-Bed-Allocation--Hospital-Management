@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Admissions{% endblock %}
+{% block content %}
+<h1>Admissions</h1>
+<p class="subtitle">{{ current|length }} patient{{ '' if current|length == 1 else 's' }} currently admitted. Discharging frees the bed and immediately serves the waiting queue.</p>
+
+<div class="panel">
+  <h2>Current</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>ID</th><th>Patient</th><th class="num">Age</th><th>Ward / bed</th><th>Urgency</th><th>Doctor</th><th>Admitted</th><th class="num">Days</th><th></th></tr>
+      {% for a in current %}
+      <tr>
+        <td>{{ a.admission_id }}</td>
+        <td>{% if has_role(ADMIN, DOCTOR, NURSE) %}<a href="{{ url_for('patient_detail', patient_id=a.patient_id) }}">{{ a.patient_name }}</a>{% else %}{{ a.patient_name }}{% endif %}</td>
+        <td class="num">{{ a.age }}</td>
+        <td>{{ a.ward_name }} / {{ a.bed_number }}</td>
+        <td>{{ status(a.urgency_code) }}</td>
+        <td>{{ a.doctor_name }}</td>
+        <td>{{ a.admission_date|dt }}</td>
+        <td class="num">{{ a.days_admitted }}</td>
+        <td class="actions-cell">
+          <span class="row-actions">
+          {% if has_role(ADMIN, DOCTOR) %}
+          <form method="post" action="{{ url_for('discharge', admission_id=a.admission_id) }}" class="inline" onsubmit='return confirm({{ ("Discharge " ~ a.patient_name ~ "?")|tojson }})'>
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="row-action">Discharge</button>
+          </form>
+          {% endif %}
+          {% if has_role(ADMIN) %}
+          <form method="post" action="{{ url_for('cancel_admission', admission_id=a.admission_id) }}" class="inline" onsubmit="return confirm('Cancel this admission (entered in error)?')">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="row-action plain">Cancel</button>
+          </form>
+          {% endif %}
+          </span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">No current admissions.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Recently closed</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>ID</th><th>Patient</th><th>Ward / bed</th><th>Doctor</th><th>Admitted</th><th>Closed</th><th>Status</th></tr>
+      {% for a in past %}
+      <tr>
+        <td>{{ a.admission_id }}</td><td>{{ a.patient_name }}</td><td>{{ a.ward_name }} / {{ a.bed_number }}</td><td>{{ a.doctor_name }}</td>
+        <td>{{ a.admission_date|dt }}</td><td>{{ a.discharge_date|dt }}</td>
+        <td>{{ status(a.admission_status) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">None yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

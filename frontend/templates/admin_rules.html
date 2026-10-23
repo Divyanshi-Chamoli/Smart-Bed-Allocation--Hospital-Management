@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Allocation rules{% endblock %}
+{% block content %}
+<h1>Allocation rules</h1>
+<p class="subtitle">These tables drive the bed recommender and the waiting-queue priority. Changes apply to the next recommendation immediately.</p>
+
+<div class="panel">
+  <h2>Ward compatibility</h2>
+  <p class="hint" style="margin:-8px 0 16px">For each requested ward type, the ward types that may serve it in order of preference. A fallback only applies when the patient's urgency weight is at least the minimum (0 = anyone, 70 = high or above, 100 = critical only).</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Requested</th><th>May use</th><th class="num">Rank</th><th class="num">Min urgency weight</th><th>Description</th><th>Active</th><th></th></tr>
+      {% for r in rules %}
+      {% set fid = 'rule' ~ r.rule_id %}
+      <tr>
+        <td><select form="{{ fid }}" name="required_ward_type" aria-label="Requested ward type">{% for t in ward_types %}<option {{ 'selected' if t == r.required_ward_type }}>{{ t }}</option>{% endfor %}</select></td>
+        <td><select form="{{ fid }}" name="allowed_ward_type" aria-label="Allowed ward type">{% for t in ward_types %}<option {{ 'selected' if t == r.allowed_ward_type }}>{{ t }}</option>{% endfor %}</select></td>
+        <td class="num"><input form="{{ fid }}" name="preference_rank" type="number" min="1" value="{{ r.preference_rank }}" style="max-width:70px" aria-label="Rank"></td>
+        <td class="num"><input form="{{ fid }}" name="min_urgency_weight" type="number" min="0" value="{{ r.min_urgency_weight }}" style="max-width:90px" aria-label="Minimum urgency weight"></td>
+        <td><input form="{{ fid }}" name="rule_description" value="{{ r.rule_description or '' }}" maxlength="200" aria-label="Description"></td>
+        <td><input form="{{ fid }}" name="is_active" type="checkbox" value="Y" {{ 'checked' if r.is_active == 'Y' }} aria-label="Active"></td>
+        <td class="actions-cell">
+          <form method="post" id="{{ fid }}" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+            <button name="action" value="rule" class="row-action plain">Save</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td><select form="newrule" name="required_ward_type" aria-label="Requested ward type">{% for t in ward_types %}<option>{{ t }}</option>{% endfor %}</select></td>
+        <td><select form="newrule" name="allowed_ward_type" aria-label="Allowed ward type">{% for t in ward_types %}<option>{{ t }}</option>{% endfor %}</select></td>
+        <td class="num"><input form="newrule" name="preference_rank" type="number" min="1" value="2" style="max-width:70px" aria-label="Rank"></td>
+        <td class="num"><input form="newrule" name="min_urgency_weight" type="number" min="0" value="70" style="max-width:90px" aria-label="Minimum urgency weight"></td>
+        <td><input form="newrule" name="rule_description" maxlength="200" placeholder="New rule description" aria-label="Description"></td>
+        <td><input form="newrule" name="is_active" type="checkbox" value="Y" checked aria-label="Active"></td>
+        <td class="actions-cell">
+          <form method="post" id="newrule" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button name="action" value="rule" class="row-action">Add rule</button>
+          </form>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="panel">
+    <h2>Priority and allocation settings</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Setting</th><th>Value</th><th></th></tr>
+        {% for c in config %}
+        {% set fid = 'cfg' ~ loop.index %}
+        <tr>
+          <td><span class="mono">{{ c.config_key }}</span><div class="rule">{{ c.description }}</div></td>
+          <td><input form="{{ fid }}" name="config_value" type="number" min="0" step="any" value="{{ c.config_value }}" style="max-width:90px" aria-label="{{ c.config_key }}"></td>
+          <td class="actions-cell">
+            <form method="post" id="{{ fid }}" class="inline">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="config_key" value="{{ c.config_key }}">
+              <button name="action" value="config" class="row-action plain">Save</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Urgency bands</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Urgency</th><th class="num">Weight</th><th class="num">Target wait</th><th>Meaning</th></tr>
+        {% for u in urgencies %}
+        <tr><td>{{ status(u.urgency_code) }}</td><td class="num">{{ u.base_weight }}</td><td class="num">{{ u.target_wait_minutes }} min</td><td class="rule">{{ u.description }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <p class="hint">Fixed rules in the recommender: children under PEDIATRIC_MAX_AGE asking for General go to Pediatric; adults are never placed in Pediatric; non-critical patients cannot take a ward's reserved beds; among suitable beds the least occupied ward wins.</p>
+  </div>
+</div>
+{% endblock %}

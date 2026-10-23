@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Beds{% endblock %}
+{% block content %}
+<h1>Bed board</h1>
+<p class="subtitle">Live status of every bed. After a discharge a bed is cleaned and inspected before it can be allocated again.{% if not has_role(ADMIN, NURSE) %} Only nurses and admins can update bed status.{% endif %}</p>
+
+<div class="legend">
+  <span class="legend-title">Bed status</span>
+  {{ status('AVAILABLE') }}{{ status('OCCUPIED') }}{{ status('AWAITING_CLEANING') }}{{ status('AWAITING_INSPECTION') }}{{ status('MAINTENANCE') }}
+</div>
+
+{% for (ward_id, ward_name, ward_type), beds in wards.items() %}
+{% set o = occupancy[ward_id] %}
+<div class="panel">
+  <h2>{{ ward_name }} <span class="rule">{{ ward_type }} · {{ o.available_beds }} free of {{ o.total_beds }}{% if o.awaiting_cleaning_beds or o.awaiting_inspection_beds %} · {{ o.awaiting_cleaning_beds + o.awaiting_inspection_beds }} being turned around{% endif %} · {{ o.occupancy_pct }}% in use{% if o.reserved_critical_beds %} · {{ o.reserved_critical_beds }} kept for critical{% endif %}</span></h2>
+  <div class="bed-grid">
+    {% for b in beds %}
+    {% set info = blocked.get(b.bed_id) %}
+    <div class="bed {{ b.bed_status }}">
+      <div class="bed-no">{{ b.bed_number }}</div>
+      {{ status(b.bed_status) }}
+      {% if info and info.past_target == 'Y' %}<div>{{ status('PAST_TARGET', 'Past target') }}</div>{% endif %}
+      {% if info and info.since %}<div class="since">since {{ info.since|dt('%d %b %H:%M') }} · {{ info.minutes_in_state }} min{% if info.target_minutes %} (target {{ info.target_minutes }}){% endif %}</div>{% endif %}
+      <div class="who">
+        {% if b.patient_id %}
+          <a href="{{ url_for('patient_detail', patient_id=b.patient_id) }}">{{ b.patient_name }}</a>
+          {% if b.urgency_code %}<div>{{ status(b.urgency_code) }}</div>{% endif %}
+        {% endif %}
+      </div>
+      {% if has_role(ADMIN, NURSE) and b.bed_status != 'OCCUPIED' %}
+      <div class="row-actions">
+        {% if b.bed_status == 'AWAITING_CLEANING' %}
+        <form method="post" action="{{ url_for('bed_cleaned', bed_id=b.bed_id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="row-action">Mark cleaned</button>
+        </form>
+        {% elif b.bed_status == 'AWAITING_INSPECTION' %}
+        <form method="post" action="{{ url_for('bed_inspect', bed_id=b.bed_id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="passed" value="Y">
+          <button class="row-action">Pass inspection</button>
+        </form>
+        <form method="post" action="{{ url_for('bed_inspect', bed_id=b.bed_id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="passed" value="N">
+          <button class="row-action plain">Fail inspection</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('bed_status', bed_id=b.bed_id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          {% if b.bed_status == 'MAINTENANCE' %}
+          <input type="hidden" name="status" value="AVAILABLE"><button class="row-action">Mark available</button>
+          {% else %}
+          <input type="hidden" name="status" value="MAINTENANCE"><button class="row-action{{ ' plain' if b.bed_status != 'AVAILABLE' }}">{{ 'Send to maintenance' if b.bed_status == 'AVAILABLE' else 'Maintenance' }}</button>
+          {% endif %}
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

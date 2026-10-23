@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_ui.html" import status %}
+{% block title %}Billing{% endblock %}
+{% block content %}
+<h1>Billing</h1>
+<p class="subtitle">“Generate bill” adds every unbilled lab test and, after discharge, the bed charge (days × ward tariff). Running it again never charges twice.</p>
+
+<div class="panel">
+  <h2>Discharged admissions to bill</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Admission</th><th>Patient</th><th>Admitted</th><th>Discharged</th><th class="num">Unbilled labs</th><th>Bill</th><th></th></tr>
+      {% for a in to_bill %}
+      <tr>
+        <td>{{ a.admission_id }}</td><td>{{ a.patient_name }}</td><td>{{ a.admission_date|dt }}</td><td>{{ a.discharge_date|dt }}</td>
+        <td class="num">{{ a.unbilled_labs }}</td>
+        <td>{% if a.bill_id %}<a href="{{ url_for('bill_detail', bill_id=a.bill_id) }}">#{{ a.bill_id }}</a>{% endif %}</td>
+        <td class="actions-cell">
+          <form method="post" action="{{ url_for('bill_generate', admission_id=a.admission_id) }}" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="row-action">Generate bill</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">Everything discharged has been billed.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Interim bill for a current admission</h2>
+  <form method="post" action="{{ url_for('bill_generate') }}" class="form-grid" style="grid-template-columns: 1fr auto">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <select name="admission_id" required aria-label="Admission">
+      <option value="">Choose admission…</option>
+      {% for a in current %}<option value="{{ a.admission_id }}">#{{ a.admission_id }} {{ a.patient_name }}{{ ' (bill #' ~ a.bill_id ~ ')' if a.bill_id }}</option>{% endfor %}
+    </select>
+    <button class="secondary">Open / update bill</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>All bills</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Bill</th><th>Date</th><th>Patient</th><th>Admission</th><th class="num">Items</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Payment</th></tr>
+      {% for b in bills %}
+      <tr>
+        <td><a href="{{ url_for('bill_detail', bill_id=b.bill_id) }}">#{{ b.bill_id }}</a></td>
+        <td>{{ b.bill_date|d }}</td><td>{{ b.patient_name }}</td>
+        <td>{{ b.admission_id }} · {{ status(b.admission_status) }}</td>
+        <td class="num">{{ b.item_count }}</td>
+        <td class="num">{{ b.total_amount|money }}</td><td class="num">{{ b.amount_paid|money }}</td><td class="num">{{ b.balance_due|money }}</td>
+        <td>{{ status(b.payment_status) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">No bills yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}
