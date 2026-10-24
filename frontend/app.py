@@ -41,6 +41,7 @@ STATUS_TONES = {
     "OCCUPIED": "high", "OVERDUE": "critical", "PAST_TARGET": "critical",
     # Turnaround states share the pending colour; inspection is drawn as a hollow dot to tell them apart
     "AWAITING_CLEANING": "moderate", "AWAITING_INSPECTION": "moderate-hollow",
+    "ORDERED": "moderate", "COMPLETED": "ok", "URGENT": "high",
 }
 STATUS_LABELS = {"MEDIUM": "Moderate", "BED_STATUS": "Bed status"}
 
@@ -70,6 +71,14 @@ def run(action, success=None):
     if message:
         flash(message, "success")
     return True
+
+
+def back_to(default_endpoint, **kwargs):
+    """Redirect to the form's local `next` path if given, otherwise to default_endpoint."""
+    target = request.form.get("next", "")
+    if target.startswith("/") and not target.startswith("//"):
+        return redirect(target)
+    return redirect(url_for(default_endpoint, **kwargs))
 
 
 def ward_types():
@@ -273,8 +282,12 @@ def patient_detail(patient_id):
     labs = query("SELECT * FROM v_lab_results_detail WHERE patient_id = :id ORDER BY test_date DESC",
                  {"id": patient_id})
     waiting = query_one("SELECT * FROM v_waiting_queue_ranked WHERE patient_id = :id", {"id": patient_id})
+    current = query_one("SELECT * FROM v_current_admissions WHERE patient_id = :id", {"id": patient_id})
+    orders = query("SELECT * FROM v_lab_orders WHERE patient_id = :id ORDER BY ordered_at DESC", {"id": patient_id})
+    tests = query("SELECT * FROM lab_test ORDER BY test_name")
     return render_template("patient_detail.html", patient=patient, history=history, labs=labs,
-                           waiting=waiting, genders=GENDERS, blood_groups=BLOOD_GROUPS)
+                           waiting=waiting, current=current, orders=orders, tests=tests,
+                           genders=GENDERS, blood_groups=BLOOD_GROUPS)
 
 
 # ------------------------------------------------------------------ admission with recommendation
@@ -452,7 +465,34 @@ def lab():
     tests = query("SELECT * FROM lab_test ORDER BY test_name")
     current = query("SELECT admission_id, patient_name, ward_name, bed_number FROM v_current_admissions "
                     "ORDER BY patient_name")
-    return render_template("lab.html", results=results, tests=tests, current=current)
+    pending = query("SELECT * FROM v_lab_orders WHERE order_status = 'ORDERED' "
+                    "ORDER BY CASE priority WHEN 'URGENT' THEN 0 ELSE 1 END, ordered_at")
+    return render_template("lab.html", results=results, tests=tests, current=current, pending=pending)
+
+
+@app.route("/lab/orders", methods=["POST"])
+@roles_required(ADMIN, DOCTOR, NURSE)
+def lab_order():
+    run(lambda: call("pkg_lab.order_test", form("admission_id", int), form("test_id", int),
+                     form("priority") or "ROUTINE", form("notes"), OUT_NUM),
+        lambda oid: f"Lab order {oid} placed.")
+    return back_to("lab")
+
+
+@app.route("/lab/orders/<int:order_id>/complete", methods=["POST"])
+@roles_required(ADMIN, LAB)
+def lab_order_complete(order_id):
+    run(lambda: call("pkg_lab.complete_order", order_id, form("result_value"), form("remarks"), OUT_NUM),
+        f"Order {order_id} completed and result saved.")
+    return back_to("lab")
+
+
+@app.route("/lab/orders/<int:order_id>/cancel", methods=["POST"])
+@roles_required(ADMIN, DOCTOR, NURSE)
+def lab_order_cancel(order_id):
+    run(lambda: call("pkg_lab.cancel_order", order_id, form("reason") or "Cancelled by " + session["username"]),
+        f"Order {order_id} cancelled.")
+    return back_to("lab")
 
 
 @app.route("/lab/tests", methods=["POST"])
@@ -624,6 +664,9 @@ REPORTS = [
      "FROM v_allocation_history WHERE action = 'ALLOCATED' AND (rule_applied LIKE 'Fallback%' "
      "OR rule_applied LIKE '%reserved%' OR rule_applied LIKE 'Age rule%' OR rule_applied LIKE 'Manual%') "
      "ORDER BY acted_at DESC"),
+    ("Lab order turnaround by test (order to result)",
+     "SELECT test_name, completed_orders, urgent_orders, avg_minutes_to_result, max_minutes_to_result "
+     "FROM v_lab_order_turnaround ORDER BY avg_minutes_to_result DESC"),
     ("Lab tests performed and revenue", "SELECT t.test_name, COUNT(r.result_id) AS times_done, "
      "COUNT(r.result_id) * t.test_cost AS revenue FROM lab_test t LEFT JOIN lab_result r ON r.test_id = t.test_id "
      "GROUP BY t.test_name, t.test_cost ORDER BY times_done DESC, t.test_name"),

@@ -39,6 +39,12 @@ It adds the new bed states and history table, swaps the `bed_status` CHECK const
 `USER_CONSTRAINTS`), installs the new trigger, package and views, and adds backdated example history. It does not
 change any bed's current status or create admissions, and it is safe to run more than once.
 
+**Adding lab test ordering to an existing database** (after the step above; keeps all existing data):
+
+```
+sqlplus hms/hms123@localhost/XEPDB1 @sql/migrate_lab_orders.sql
+```
+
 **Running the tests** without touching real data: install into a separate schema (for example `hms_test`) and
 point the scripts at it:
 
@@ -57,19 +63,21 @@ frontend\.venv\Scripts\python frontend\tests\smoke_test.py
 | `hospitalmanagement.sql`, `createseq.sql`, `INSERTION/` | Original schema, sequences, seed data (unchanged) |
 | `sql/10_allocation_schema.sql` | Rule tables, `waiting_queue`, `bed_allocation_log`, extra columns, double-booking indexes |
 | `sql/12_bed_turnaround_schema.sql` | Five bed states (`ck_bed_status`), `bed_status_history` table |
+| `sql/14_lab_orders_schema.sql` | `lab_order` table (one open order per test per admission) |
 | `sql/20_triggers.sql` | Auto IDs, admission guard, bed life-cycle guard + status history, bill totals (compound trigger), payment status, password hashing |
 | `sql/25_seed_allocation.sql` | Urgency bands, ward compatibility rules, tunable config, tariffs, demo patients |
 | `sql/27_seed_turnaround.sql` | Cleaning/inspection targets, backdated turnaround history, one bed past its cleaning target (fresh install only) |
 | `sql/30_pkg_security.sql` | Login + `assert_role` used by every write procedure |
 | `sql/40_pkg_bed_allocation.sql` | **The allocation algorithm, queue and discharge logic** |
-| `sql/50_pkg_clinical_billing.sql` | `pkg_admin`, `pkg_lab`, `pkg_billing` |
+| `sql/50_pkg_clinical_billing.sql` | `pkg_admin`, `pkg_lab` (order, cancel, complete, unordered results), `pkg_billing` |
 | `procedures.sql` | Original `admit_patient` / `discharge_patient`, now wrappers over the package |
 | `sql/60_views.sql` | Reporting views (occupancy, bed board, queue, billing, lab, history …) |
 | `sql/62_turnaround_views.sql` | `v_bed_turnaround`, `v_ward_turnaround`, `v_blocked_capacity`, `v_beds_blocking_queue` |
 | `sql/migrate_bed_turnaround.sql` | Upgrade script for databases installed before turnaround tracking |
+| `sql/migrate_lab_orders.sql` | Upgrade script that adds lab test ordering |
 | `sql/70_db_roles.sql` | Oracle roles `HMS_ADMIN`, `HMS_DOCTOR`, `HMS_NURSE`, `HMS_LAB`, `HMS_BILLING` |
-| `sql/90_sample_queries.sql` | 18 reporting queries (joins, aggregates, analytic functions, subqueries) |
-| `sql/95_test_allocation.sql` | 54 automated checks (run on a fresh install) |
+| `sql/90_sample_queries.sql` | 20 reporting queries (joins, aggregates, analytic functions, subqueries) |
+| `sql/95_test_allocation.sql` | 65 automated checks (run on a fresh install) |
 | `frontend/` | Flask app; `tests/smoke_test.py` (role access), `tests/concurrency_test.py` (race for the last bed) |
 
 ## How allocation works (`pkg_bed_allocation`)
@@ -132,6 +140,19 @@ AVAILABLE / AWAITING_CLEANING / AWAITING_INSPECTION -> MAINTENANCE -> AVAILABLE
 - In the app: the bed board has Mark cleaned and Pass/Fail inspection actions, the dashboard has a "Why beds are
   unavailable" card, and Reports has turnaround by ward.
 
+## Lab test orders
+
+1. A doctor or nurse orders a test for an admitted patient, from the patient's page (or the Lab page for doctors),
+   choosing Routine or Urgent (`pkg_lab.order_test`).
+2. The lab sees **Pending orders** on the Lab page, urgent first, enters the result and clicks Complete
+   (`pkg_lab.complete_order`). This creates the `lab_result` row, which billing charges for as before.
+3. Open orders can be cancelled (`pkg_lab.cancel_order`); discharging or cancelling the admission cancels any
+   still pending.
+
+The same test cannot be open twice on one admission (unique index `uq_open_lab_order`). Tests done without an
+order can still be entered with "Record an unordered result". `v_lab_orders` lists orders with status and waiting
+time; `v_lab_order_turnaround` gives order-to-result times per test (also in Reports).
+
 ## Roles
 
 Enforced twice: Flask decorators hide and refuse pages (HTTP 403), and every PL/SQL write procedure calls
@@ -145,7 +166,8 @@ Enforced twice: Flask decorators hide and refuse pages (HTTP 403), and every PL/
 | Request admission, queue | ✔ | ✔ | ✔ | | |
 | Discharge | ✔ | ✔ | | | |
 | Bed maintenance, mark cleaned, inspect | ✔ | | ✔ | | |
-| Record lab results | ✔ | | | ✔ | |
+| Order / cancel lab tests | ✔ | ✔ | ✔ | | |
+| Complete lab orders, record lab results | ✔ | | | ✔ | |
 | View lab results | ✔ | ✔ | | ✔ | |
 | Billing and payments | ✔ | | | | ✔ |
 | Staff, users, wards, rules, reports | ✔ | | | | |

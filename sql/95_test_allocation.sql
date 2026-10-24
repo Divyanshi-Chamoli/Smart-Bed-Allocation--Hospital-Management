@@ -21,6 +21,12 @@ DECLARE
     v_g110 NUMBER;
     v_n2 NUMBER;
     v_n3 NUMBER;
+    v_ord1 NUMBER;
+    v_ord2 NUMBER;
+    v_ord3 NUMBER;
+    v_ord4 NUMBER;
+    v_res1 NUMBER;
+    v_res2 NUMBER;
 
     PROCEDURE as_user (p_username IN VARCHAR2) IS
     BEGIN
@@ -72,6 +78,13 @@ DECLARE
     BEGIN
         SELECT available_beds INTO v_count FROM v_bed_occupancy WHERE ward_type = 'ICU';
         RETURN v_count;
+    END;
+
+    FUNCTION order_status_of (p_order_id IN NUMBER) RETURN VARCHAR2 IS
+        v_status lab_order.order_status%TYPE;
+    BEGIN
+        SELECT order_status INTO v_status FROM lab_order WHERE order_id = p_order_id;
+        RETURN v_status;
     END;
 
     FUNCTION bed_of_admission (p_admission_id IN NUMBER) RETURN NUMBER IS
@@ -324,15 +337,82 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN expect_error('occupied bed cannot go to maintenance', -20012, SQLCODE, SQLERRM);
     END;
 
-    DBMS_OUTPUT.PUT_LINE('--- Lab results and billing');
+    DBMS_OUTPUT.PUT_LINE('--- Lab orders');
     v_lab_adm := active_admission(8);
+    as_user('rahul');  -- DOCTOR
+    pkg_lab.order_test(v_lab_adm, 1, 'URGENT', 'Check Hb', v_ord1);      -- Blood Test
+    pkg_lab.order_test(v_lab_adm, 6, NULL, NULL, v_ord2);                 -- ECG, routine by default
+    SELECT COUNT(*) INTO v_num FROM v_lab_orders
+    WHERE order_id IN (v_ord1, v_ord2) AND order_status = 'ORDERED' AND ordered_by_name = 'Dr. Rahul Sharma';
+    SELECT priority INTO v_text FROM lab_order WHERE order_id = v_ord1;
+    check_true('doctor orders 2 tests; both pending, first one URGENT', v_num = 2 AND v_text = 'URGENT');
+    BEGIN
+        pkg_lab.order_test(v_lab_adm, 1, 'ROUTINE', NULL, v_num);
+        check_true('the same test cannot be ordered twice while still pending', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN
+        expect_error('the same test cannot be ordered twice while still pending', -20082, SQLCODE, SQLERRM);
+    END;
+    BEGIN
+        pkg_lab.order_test(v_lab_adm, 2, 'ASAP', NULL, v_num);
+        check_true('an unknown priority is rejected', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN expect_error('an unknown priority is rejected', -20085, SQLCODE, SQLERRM);
+    END;
+
+    as_user('ananya');  -- NURSE
+    pkg_lab.order_test(v_lab_adm, 2, 'ROUTINE', 'Chest', v_ord3);         -- X-Ray
+    check_true('nurse can order a test', order_status_of(v_ord3) = 'ORDERED');
+
+    as_user('riya');  -- LAB_STAFF
+    BEGIN
+        pkg_lab.order_test(v_lab_adm, 3, 'ROUTINE', NULL, v_num);
+        check_true('lab staff cannot order tests', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN expect_error('lab staff cannot order tests', -20100, SQLCODE, SQLERRM);
+    END;
+    as_user('rahul');
+    BEGIN
+        pkg_lab.complete_order(v_ord1, 'x', NULL, v_num);
+        check_true('a doctor cannot complete an order', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN expect_error('a doctor cannot complete an order', -20100, SQLCODE, SQLERRM);
+    END;
+
+    as_user('ananya');
+    pkg_lab.cancel_order(v_ord3, 'Not needed');
+    check_true('an order can be cancelled', order_status_of(v_ord3) = 'CANCELLED');
     as_user('riya');
-    pkg_lab.record_result(v_lab_adm, 1, 'Hb 13.2 g/dL', 'Normal', v_num);
-    pkg_lab.record_result(v_lab_adm, 6, 'Sinus rhythm', NULL, v_num);
-    check_true('lab staff recorded 2 results', v_num IS NOT NULL);
+    BEGIN
+        pkg_lab.complete_order(v_ord3, 'x', NULL, v_num);
+        check_true('a cancelled order cannot be completed', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN expect_error('a cancelled order cannot be completed', -20084, SQLCODE, SQLERRM);
+    END;
+
+    pkg_lab.complete_order(v_ord1, 'Hb 13.2 g/dL', 'Normal', v_res1);
+    pkg_lab.complete_order(v_ord2, 'Sinus rhythm', NULL, v_res2);
+    SELECT COUNT(*) INTO v_num FROM v_lab_orders
+    WHERE order_id = v_ord1 AND order_status = 'COMPLETED' AND result_id = v_res1 AND result_value = 'Hb 13.2 g/dL';
+    SELECT COUNT(*) INTO v_n2 FROM lab_result
+    WHERE result_id = v_res1 AND admission_id = v_lab_adm AND test_id = 1 AND staff_id = 4;
+    check_true('lab completes the order: COMPLETED, linked to a lab_result recorded by riya', v_num = 1 AND v_n2 = 1);
+    BEGIN
+        pkg_lab.complete_order(v_ord1, 'again', NULL, v_num);
+        check_true('a completed order cannot be completed twice', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN expect_error('a completed order cannot be completed twice', -20084, SQLCODE, SQLERRM);
+    END;
 
     as_user('rahul');
+    pkg_lab.order_test(v_lab_adm, 3, 'ROUTINE', NULL, v_ord4);           -- MRI, still pending at discharge
     pkg_bed_allocation.discharge_patient(v_lab_adm, v_msg);
+    DBMS_OUTPUT.PUT_LINE('      ' || v_msg);
+    SELECT order_status, cancel_reason INTO v_text, v_msg FROM lab_order WHERE order_id = v_ord4;
+    check_true('discharge cancels the pending order', v_text = 'CANCELLED' AND v_msg = 'Patient discharged',
+               v_text || ' / ' || v_msg);
+    BEGIN
+        pkg_lab.order_test(v_lab_adm, 3, 'ROUTINE', NULL, v_num);
+        check_true('tests cannot be ordered for a discharged admission', FALSE, 'no error raised');
+    EXCEPTION WHEN OTHERS THEN
+        expect_error('tests cannot be ordered for a discharged admission', -20080, SQLCODE, SQLERRM);
+    END;
+
+    DBMS_OUTPUT.PUT_LINE('--- Billing');
 
     as_user('arjun');  -- BILLING_STAFF
     pkg_billing.generate_bill(v_lab_adm, v_bill, v_msg);

@@ -64,6 +64,10 @@ CREATE OR REPLACE TRIGGER trg_bed_history_id BEFORE INSERT ON bed_status_history
 WHEN (new.history_id IS NULL)
 BEGIN :new.history_id := bed_history_seq.NEXTVAL; END;
 /
+CREATE OR REPLACE TRIGGER trg_lab_order_id BEFORE INSERT ON lab_order FOR EACH ROW
+WHEN (new.order_id IS NULL)
+BEGIN :new.order_id := lab_order_seq.NEXTVAL; END;
+/
 
 
 -- 2. Admission integrity: doctor must be a Doctor, a new admission needs an AVAILABLE bed

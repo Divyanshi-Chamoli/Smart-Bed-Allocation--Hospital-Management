@@ -1,12 +1,84 @@
 {% extends "base.html" %}
+{% from "_ui.html" import status %}
 {% block title %}Lab{% endblock %}
 {% block content %}
 <h1>Laboratory</h1>
-<p class="subtitle">Tests can only be recorded against a current admission.</p>
+<p class="subtitle">Doctors and nurses order tests for admitted patients; the lab completes each order by entering the result.</p>
+
+<div class="panel">
+  <h2>Pending orders <span class="rule">{{ pending|length }} waiting · urgent first</span></h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Order</th><th>Priority</th><th>Patient</th><th>Test</th><th>Ordered by</th><th class="num">Waiting</th>{% if has_role(ADMIN, LAB) %}<th>Result</th><th>Remarks</th>{% endif %}<th></th></tr>
+      {% for o in pending %}
+      {% set fid = 'complete' ~ o.order_id %}
+      <tr>
+        <td>{{ o.order_id }}</td>
+        <td>{% if o.priority == 'URGENT' %}{{ status('URGENT') }}{% else %}<span class="rule">Routine</span>{% endif %}</td>
+        <td class="nowrap">{{ o.patient_name }}<div class="rule">{{ o.ward_name }} / {{ o.bed_number }}</div></td>
+        <td class="nowrap">{{ o.test_name }}{% if o.notes %}<div class="rule">{{ o.notes }}</div>{% endif %}</td>
+        <td class="nowrap">{{ o.ordered_by_name }}</td>
+        <td class="num">{{ o.minutes_open }} min</td>
+        {% if has_role(ADMIN, LAB) %}
+        <td><input form="{{ fid }}" name="result_value" required maxlength="500" aria-label="Result for order {{ o.order_id }}" placeholder="Result"></td>
+        <td><input form="{{ fid }}" name="remarks" maxlength="500" aria-label="Remarks for order {{ o.order_id }}" placeholder="Optional"></td>
+        {% endif %}
+        <td class="actions-cell">
+          <span class="row-actions">
+            {% if has_role(ADMIN, LAB) %}
+            <form method="post" action="{{ url_for('lab_order_complete', order_id=o.order_id) }}" id="{{ fid }}" class="inline">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="row-action">Complete</button>
+            </form>
+            {% endif %}
+            {% if has_role(ADMIN, DOCTOR, NURSE) %}
+            <form method="post" action="{{ url_for('lab_order_cancel', order_id=o.order_id) }}" class="inline" onsubmit="return confirm('Cancel this lab order?')">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="row-action plain">Cancel</button>
+            </form>
+            {% endif %}
+          </span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">No pending lab orders.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+{% if has_role(ADMIN, DOCTOR) %}
+<div class="panel">
+  <h2>Order a test</h2>
+  <form method="post" action="{{ url_for('lab_order') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid">
+      <div><label for="order_admission">Admission</label>
+        <select id="order_admission" name="admission_id" required>
+          <option value="">Choose…</option>
+          {% for a in current %}<option value="{{ a.admission_id }}">#{{ a.admission_id }} {{ a.patient_name }} - {{ a.ward_name }} / {{ a.bed_number }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="order_test">Test</label>
+        <select id="order_test" name="test_id" required>
+          <option value="">Choose…</option>
+          {% for t in tests %}<option value="{{ t.test_id }}">{{ t.test_name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="order_priority">Priority</label>
+        <select id="order_priority" name="priority"><option value="ROUTINE">Routine</option><option value="URGENT">Urgent</option></select>
+      </div>
+      <div><label for="order_notes">Notes</label><input id="order_notes" name="notes" maxlength="500" placeholder="Optional"></div>
+    </div>
+    <div class="actions"><button>Place order</button></div>
+  </form>
+</div>
+{% endif %}
 
 {% if has_role(ADMIN, LAB) %}
 <div class="panel">
-  <h2>Record a result</h2>
+  <h2>Record an unordered result</h2>
+  <p class="hint" style="margin:-8px 0 16px">For a test done without an order in the system. Ordered tests are completed from the pending list above.</p>
   <form method="post">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-grid">

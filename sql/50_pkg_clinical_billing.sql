@@ -390,9 +390,29 @@ END pkg_admin;
 
 CREATE OR REPLACE PACKAGE pkg_lab AS
 
+    -- Result for a test that was not ordered through the system (walk-in / verbal request)
     PROCEDURE record_result (
         p_admission_id IN NUMBER,
         p_test_id IN NUMBER,
+        p_result_value IN VARCHAR2,
+        p_remarks IN VARCHAR2,
+        p_result_id OUT NUMBER
+    );
+
+    -- Doctor or nurse orders a test for an admitted patient
+    PROCEDURE order_test (
+        p_admission_id IN NUMBER,
+        p_test_id IN NUMBER,
+        p_priority IN VARCHAR2,
+        p_notes IN VARCHAR2,
+        p_order_id OUT NUMBER
+    );
+
+    PROCEDURE cancel_order (p_order_id IN NUMBER, p_reason IN VARCHAR2);
+
+    -- Lab enters the result of an open order
+    PROCEDURE complete_order (
+        p_order_id IN NUMBER,
         p_result_value IN VARCHAR2,
         p_remarks IN VARCHAR2,
         p_result_id OUT NUMBER
@@ -403,18 +423,9 @@ END pkg_lab;
 
 CREATE OR REPLACE PACKAGE BODY pkg_lab AS
 
-    PROCEDURE record_result (
-        p_admission_id IN NUMBER,
-        p_test_id IN NUMBER,
-        p_result_value IN VARCHAR2,
-        p_remarks IN VARCHAR2,
-        p_result_id OUT NUMBER
-    ) IS
+    PROCEDURE check_current_admission (p_admission_id IN NUMBER, p_error_code IN NUMBER, p_action IN VARCHAR2) IS
         v_status admission.admission_status%TYPE;
-        v_count NUMBER;
     BEGIN
-        pkg_security.assert_role('ADMIN,LAB_STAFF');
-
         BEGIN
             SELECT admission_status INTO v_status FROM admission WHERE admission_id = p_admission_id;
         EXCEPTION
@@ -423,22 +434,151 @@ CREATE OR REPLACE PACKAGE BODY pkg_lab AS
         END;
 
         IF v_status <> 'ADMITTED' THEN
-            RAISE_APPLICATION_ERROR(-20060, 'Results can only be recorded for a current admission (this one is '
+            RAISE_APPLICATION_ERROR(p_error_code, p_action || ' only for a current admission (this one is '
                 || v_status || ')');
         END IF;
+    END check_current_admission;
 
+
+    PROCEDURE check_test (p_test_id IN NUMBER) IS
+        v_count NUMBER;
+    BEGIN
         SELECT COUNT(*) INTO v_count FROM lab_test WHERE test_id = p_test_id;
         IF v_count = 0 THEN
             RAISE_APPLICATION_ERROR(-20061, 'Lab test does not exist');
         END IF;
+    END check_test;
+
+
+    -- Shared by record_result and complete_order. Does not commit.
+    FUNCTION insert_result (
+        p_admission_id IN NUMBER,
+        p_test_id IN NUMBER,
+        p_result_value IN VARCHAR2,
+        p_remarks IN VARCHAR2
+    ) RETURN NUMBER IS
+        v_result_id lab_result.result_id%TYPE;
+    BEGIN
+        check_current_admission(p_admission_id, -20060, 'Results can be recorded');
+        check_test(p_test_id);
 
         INSERT INTO lab_result (admission_id, test_id, staff_id, test_date, result_value, remarks)
         VALUES (p_admission_id, p_test_id, pkg_security.current_staff_id, SYSDATE, p_result_value, p_remarks)
-        RETURNING result_id INTO p_result_id;
+        RETURNING result_id INTO v_result_id;
+        RETURN v_result_id;
+    END insert_result;
+
+
+    PROCEDURE record_result (
+        p_admission_id IN NUMBER,
+        p_test_id IN NUMBER,
+        p_result_value IN VARCHAR2,
+        p_remarks IN VARCHAR2,
+        p_result_id OUT NUMBER
+    ) IS
+    BEGIN
+        pkg_security.assert_role('ADMIN,LAB_STAFF');
+        p_result_id := insert_result(p_admission_id, p_test_id, p_result_value, p_remarks);
         COMMIT;
     EXCEPTION
         WHEN OTHERS THEN ROLLBACK; RAISE;
     END record_result;
+
+
+    PROCEDURE order_test (
+        p_admission_id IN NUMBER,
+        p_test_id IN NUMBER,
+        p_priority IN VARCHAR2,
+        p_notes IN VARCHAR2,
+        p_order_id OUT NUMBER
+    ) IS
+        v_priority lab_order.priority%TYPE := UPPER(NVL(p_priority, 'ROUTINE'));
+    BEGIN
+        pkg_security.assert_role('ADMIN,DOCTOR,NURSE');
+
+        IF v_priority NOT IN ('ROUTINE','URGENT') THEN
+            RAISE_APPLICATION_ERROR(-20085, 'Priority must be ROUTINE or URGENT');
+        END IF;
+        check_current_admission(p_admission_id, -20080, 'Tests can be ordered');
+        check_test(p_test_id);
+
+        INSERT INTO lab_order (admission_id, test_id, ordered_by, ordered_at, priority, order_status, notes)
+        VALUES (p_admission_id, p_test_id, pkg_security.current_staff_id, SYSDATE, v_priority, 'ORDERED', p_notes)
+        RETURNING order_id INTO p_order_id;
+        COMMIT;
+    EXCEPTION
+        WHEN DUP_VAL_ON_INDEX THEN
+            ROLLBACK;
+            RAISE_APPLICATION_ERROR(-20082, 'This test is already ordered for this admission and not yet done');
+        WHEN OTHERS THEN ROLLBACK; RAISE;
+    END order_test;
+
+
+    -- Locks an order and returns its status; raises if it does not exist
+    FUNCTION lock_order (p_order_id IN NUMBER, p_admission_id OUT NUMBER, p_test_id OUT NUMBER) RETURN VARCHAR2 IS
+        v_status lab_order.order_status%TYPE;
+    BEGIN
+        SELECT order_status, admission_id, test_id INTO v_status, p_admission_id, p_test_id
+        FROM lab_order
+        WHERE order_id = p_order_id
+        FOR UPDATE;
+        RETURN v_status;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20083, 'Lab order does not exist');
+    END lock_order;
+
+
+    PROCEDURE cancel_order (p_order_id IN NUMBER, p_reason IN VARCHAR2) IS
+        v_status lab_order.order_status%TYPE;
+        v_admission_id NUMBER;
+        v_test_id NUMBER;
+    BEGIN
+        pkg_security.assert_role('ADMIN,DOCTOR,NURSE');
+
+        v_status := lock_order(p_order_id, v_admission_id, v_test_id);
+        IF v_status <> 'ORDERED' THEN
+            RAISE_APPLICATION_ERROR(-20084, 'Lab order ' || p_order_id || ' is already ' || v_status);
+        END IF;
+
+        UPDATE lab_order
+        SET order_status = 'CANCELLED',
+            cancel_reason = SUBSTR(NVL(p_reason, 'Cancelled by ' || pkg_security.current_username), 1, 200)
+        WHERE order_id = p_order_id;
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN ROLLBACK; RAISE;
+    END cancel_order;
+
+
+    PROCEDURE complete_order (
+        p_order_id IN NUMBER,
+        p_result_value IN VARCHAR2,
+        p_remarks IN VARCHAR2,
+        p_result_id OUT NUMBER
+    ) IS
+        v_status lab_order.order_status%TYPE;
+        v_admission_id NUMBER;
+        v_test_id NUMBER;
+    BEGIN
+        pkg_security.assert_role('ADMIN,LAB_STAFF');
+
+        v_status := lock_order(p_order_id, v_admission_id, v_test_id);
+        IF v_status <> 'ORDERED' THEN
+            RAISE_APPLICATION_ERROR(-20084, 'Lab order ' || p_order_id || ' is already ' || v_status);
+        END IF;
+
+        p_result_id := insert_result(v_admission_id, v_test_id, p_result_value, p_remarks);
+
+        UPDATE lab_order
+        SET order_status = 'COMPLETED',
+            result_id = p_result_id,
+            completed_at = SYSDATE
+        WHERE order_id = p_order_id;
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN ROLLBACK; RAISE;
+    END complete_order;
 
 END pkg_lab;
 /

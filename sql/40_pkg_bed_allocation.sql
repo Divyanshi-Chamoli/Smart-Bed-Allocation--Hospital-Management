@@ -724,6 +724,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_bed_allocation AS
         v_bed_id NUMBER;
         v_patient_id NUMBER;
         v_status admission.admission_status%TYPE;
+        v_cancelled_orders NUMBER;
     BEGIN
         BEGIN
             SELECT bed_id, patient_id, admission_status
@@ -751,8 +752,20 @@ CREATE OR REPLACE PACKAGE BODY pkg_bed_allocation AS
 
         log_action(v_patient_id, v_bed_id, NULL, p_admission_id, 'RELEASED', p_reason, NULL);
 
+        -- Lab tests still waiting to be done for this stay will not be done now
+        UPDATE lab_order
+        SET order_status = 'CANCELLED',
+            cancel_reason = CASE p_new_status WHEN 'DISCHARGED' THEN 'Patient discharged'
+                                              ELSE 'Admission cancelled' END
+        WHERE admission_id = p_admission_id
+        AND order_status = 'ORDERED';
+        v_cancelled_orders := SQL%ROWCOUNT;
+
         p_message := 'Admission ' || p_admission_id || ' ' || LOWER(p_new_status) || '; '
-            || bed_label(v_bed_id) || ' is now awaiting cleaning.';
+            || bed_label(v_bed_id) || ' is now awaiting cleaning.'
+            || CASE WHEN v_cancelled_orders > 0
+                    THEN ' ' || v_cancelled_orders || ' pending lab order(s) were cancelled.'
+               END;
     END close_admission;
 
 

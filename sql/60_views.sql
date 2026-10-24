@@ -275,3 +275,49 @@ SELECT u.user_id,
 FROM user_account u
 JOIN role r ON r.role_id = u.role_id
 JOIN staff s ON s.staff_id = u.staff_id;
+
+
+-- Lab orders with patient, location, who ordered and how long they have been waiting
+CREATE OR REPLACE VIEW v_lab_orders AS
+SELECT o.order_id,
+       o.order_status,
+       o.priority,
+       o.ordered_at,
+       o.completed_at,
+       ROUND((NVL(o.completed_at, SYSDATE) - o.ordered_at) * 1440) AS minutes_open,
+       o.notes,
+       o.cancel_reason,
+       o.admission_id,
+       a.admission_status,
+       p.patient_id,
+       p.first_name || ' ' || p.last_name AS patient_name,
+       w.ward_name,
+       b.bed_number,
+       t.test_id,
+       t.test_name,
+       t.test_cost,
+       s.staff_name AS ordered_by_name,
+       o.result_id,
+       r.result_value,
+       r.remarks AS result_remarks
+FROM lab_order o
+JOIN admission a ON a.admission_id = o.admission_id
+JOIN patient p ON p.patient_id = a.patient_id
+JOIN bed b ON b.bed_id = a.bed_id
+JOIN ward w ON w.ward_id = b.ward_id
+JOIN lab_test t ON t.test_id = o.test_id
+JOIN staff s ON s.staff_id = o.ordered_by
+LEFT JOIN lab_result r ON r.result_id = o.result_id;
+
+
+-- How long completed orders took from order to result, per test
+CREATE OR REPLACE VIEW v_lab_order_turnaround AS
+SELECT t.test_name,
+       COUNT(*) AS completed_orders,
+       SUM(CASE WHEN o.priority = 'URGENT' THEN 1 ELSE 0 END) AS urgent_orders,
+       ROUND(AVG((o.completed_at - o.ordered_at) * 1440), 1) AS avg_minutes_to_result,
+       ROUND(MAX((o.completed_at - o.ordered_at) * 1440), 1) AS max_minutes_to_result
+FROM lab_order o
+JOIN lab_test t ON t.test_id = o.test_id
+WHERE o.order_status = 'COMPLETED'
+GROUP BY t.test_name;

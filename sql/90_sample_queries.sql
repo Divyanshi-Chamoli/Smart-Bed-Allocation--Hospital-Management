@@ -114,3 +114,14 @@ FROM bed_status_history h
 JOIN bed b ON b.bed_id = h.bed_id
 WHERE b.bed_number = 'I201'
 ORDER BY h.changed_at, h.history_id;
+
+PROMPT 19. Pending lab orders, urgent first
+SELECT order_id, priority, patient_name, ward_name, bed_number, test_name, ordered_by_name, minutes_open
+FROM v_lab_orders
+WHERE order_status = 'ORDERED'
+ORDER BY CASE priority WHEN 'URGENT' THEN 0 ELSE 1 END, ordered_at;
+
+PROMPT 20. Time from order to result per lab test
+SELECT test_name, completed_orders, urgent_orders, avg_minutes_to_result, max_minutes_to_result
+FROM v_lab_order_turnaround
+ORDER BY avg_minutes_to_result DESC;

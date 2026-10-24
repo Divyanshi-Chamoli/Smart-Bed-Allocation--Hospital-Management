@@ -35,6 +35,61 @@
   </div>
 </div>
 
+{% if current %}
+<div class="panel" id="order-test">
+  <h2>Order a lab test <span class="rule">admission {{ current.admission_id }} · {{ current.ward_name }} / {{ current.bed_number }}</span></h2>
+  <form method="post" action="{{ url_for('lab_order') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="admission_id" value="{{ current.admission_id }}">
+    <input type="hidden" name="next" value="{{ url_for('patient_detail', patient_id=patient.patient_id) }}">
+    <div class="form-grid">
+      <div><label for="order_test">Test</label>
+        <select id="order_test" name="test_id" required>
+          <option value="">Choose…</option>
+          {% for t in tests %}<option value="{{ t.test_id }}">{{ t.test_name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label for="order_priority">Priority</label>
+        <select id="order_priority" name="priority"><option value="ROUTINE">Routine</option><option value="URGENT">Urgent</option></select>
+      </div>
+      <div class="field-full"><label for="order_notes">Notes</label><input id="order_notes" name="notes" maxlength="500" placeholder="Optional, e.g. fasting sample"></div>
+    </div>
+    <div class="actions"><button>Place order</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% if orders %}
+<div class="panel">
+  <h2>Lab orders</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Order</th><th>Ordered</th><th>Test</th><th>Priority</th><th>Status</th><th>Ordered by</th><th>Result</th><th></th></tr>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.order_id }}</td>
+        <td>{{ o.ordered_at|dt }}</td>
+        <td>{{ o.test_name }}</td>
+        <td>{% if o.priority == 'URGENT' %}{{ status('URGENT') }}{% else %}<span class="rule">Routine</span>{% endif %}</td>
+        <td>{{ status(o.order_status) }}{% if o.cancel_reason %}<div class="rule">{{ o.cancel_reason }}</div>{% endif %}</td>
+        <td>{{ o.ordered_by_name }}</td>
+        <td>{{ o.result_value or '' }}</td>
+        <td class="actions-cell">
+          {% if o.order_status == 'ORDERED' %}
+          <form method="post" action="{{ url_for('lab_order_cancel', order_id=o.order_id) }}" class="inline" onsubmit="return confirm('Cancel this lab order?')">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="next" value="{{ url_for('patient_detail', patient_id=patient.patient_id) }}">
+            <button class="row-action plain">Cancel</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% if labs %}
 <div class="panel">
   <h2>Lab results</h2>

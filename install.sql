@@ -24,6 +24,7 @@ COMMIT;
 PROMPT == Allocation extension: tables, indexes
 @@sql/10_allocation_schema.sql
 @@sql/12_bed_turnaround_schema.sql
+@@sql/14_lab_orders_schema.sql
 
 PROMPT == Triggers
 @@sql/20_triggers.sql

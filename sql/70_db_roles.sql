@@ -56,6 +56,9 @@ GRANT SELECT ON v_doctor_workload TO HMS_DOCTOR;
 GRANT SELECT ON v_blocked_capacity TO HMS_DOCTOR;
 GRANT SELECT ON v_beds_blocking_queue TO HMS_DOCTOR;
 GRANT SELECT ON v_ward_turnaround TO HMS_DOCTOR;
+-- Doctors and nurses order/cancel lab tests; completing an order re-checks the role inside pkg_lab
+GRANT EXECUTE ON pkg_lab TO HMS_DOCTOR;
+GRANT SELECT ON v_lab_orders TO HMS_DOCTOR;
 
 -- NURSE: patients, admission requests, queue, bed maintenance
 GRANT EXECUTE ON pkg_bed_allocation TO HMS_NURSE;
@@ -71,12 +74,15 @@ GRANT SELECT ON v_blocked_capacity TO HMS_NURSE;
 GRANT SELECT ON v_beds_blocking_queue TO HMS_NURSE;
 GRANT SELECT ON v_ward_turnaround TO HMS_NURSE;
 GRANT SELECT ON v_bed_turnaround TO HMS_NURSE;
+GRANT EXECUTE ON pkg_lab TO HMS_NURSE;
+GRANT SELECT ON v_lab_orders TO HMS_NURSE;
 
 -- LAB STAFF: record and read results
 GRANT EXECUTE ON pkg_lab TO HMS_LAB;
 GRANT SELECT ON lab_test TO HMS_LAB;
 GRANT SELECT ON v_current_admissions TO HMS_LAB;
 GRANT SELECT ON v_lab_results_detail TO HMS_LAB;
+GRANT SELECT ON v_lab_orders TO HMS_LAB;
 
 -- BILLING STAFF: bills, items, payments
 GRANT EXECUTE ON pkg_billing TO HMS_BILLING;

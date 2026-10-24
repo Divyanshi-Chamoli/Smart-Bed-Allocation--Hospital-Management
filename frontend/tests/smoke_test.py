@@ -50,11 +50,22 @@ def main():
             if (status == 403) == turnaround_allowed:
                 failures += 1
                 print(f"FAIL {username:7} POST {path:18} got {status}")
+        # Lab orders: who may order, complete and cancel (non-existent ids, so nothing changes)
+        order_checks = (
+            ("/lab/orders", {"admission_id": "999999", "test_id": "1"}, ("admin", "rahul", "ananya")),
+            ("/lab/orders/999999/complete", {"result_value": "x"}, ("admin", "riya")),
+            ("/lab/orders/999999/cancel", {}, ("admin", "rahul", "ananya")),
+        )
+        for path, data, allowed in order_checks:
+            status = client.post(path, data={**data, "csrf": token}).status_code
+            if (status == 403) == (username in allowed):
+                failures += 1
+                print(f"FAIL {username:7} POST {path:28} got {status}")
         # A forged POST without the CSRF token is rejected
         if client.post("/queue/process").status_code != 400:
             failures += 1
             print(f"FAIL {username} POST without CSRF token was accepted")
-        print(f"{username:7} checked {len(PAGES)} pages + 2 bed turnaround actions")
+        print(f"{username:7} checked {len(PAGES)} pages + 2 bed turnaround + 3 lab order actions")
         client.post("/logout", data={"csrf": token})
 
     anon = app.test_client()
