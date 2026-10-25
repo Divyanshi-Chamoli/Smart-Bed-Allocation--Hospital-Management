@@ -60,7 +60,7 @@ frontend\.venv\Scripts\python frontend\tests\smoke_test.py
 
 | File | Contents |
 |---|---|
-| `hospitalmanagement.sql`, `createseq.sql`, `INSERTION/` | Original schema, sequences, seed data (unchanged) |
+| `hospitalmanagement.sql`, `createseq.sql`, `INSERTION/` | Original schema, sequences, seed data; `insert_more_patients.sql` adds 10 more patients |
 | `sql/10_allocation_schema.sql` | Rule tables, `waiting_queue`, `bed_allocation_log`, extra columns, double-booking indexes |
 | `sql/12_bed_turnaround_schema.sql` | Five bed states (`ck_bed_status`), `bed_status_history` table |
 | `sql/14_lab_orders_schema.sql` | `lab_order` table (one open order per test per admission) |

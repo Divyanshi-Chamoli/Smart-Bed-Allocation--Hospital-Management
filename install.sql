@@ -31,6 +31,7 @@ PROMPT == Triggers
 
 PROMPT == Allocation rules and demo data
 @@sql/25_seed_allocation.sql
+@@INSERTION/insert_more_patients.sql
 @@sql/27_seed_turnaround.sql
 
 PROMPT == Packages
